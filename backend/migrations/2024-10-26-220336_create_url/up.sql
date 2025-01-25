@@ -1,5 +1,0 @@
--- Your SQL goes here
-CREATE TABLE urls (
-  id INTEGER NOT NULL PRIMARY KEY AUTO_INCREMENT,
-  url TEXT NOT NULL
-);

@@ -1,9 +1,10 @@
 mod schema;
 use actix_web::{
+    delete,
     error::ErrorNotFound,
     get, post,
     web::{self, Redirect},
-    App, HttpServer, Result,
+    App, HttpResponse, HttpServer, Responder, Result,
 };
 use diesel::{
     insert_into,
@@ -41,6 +42,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .service(redirect)
             .service(create)
+            .service(delete)
             .app_data(web::Data::new(pool.clone()))
     })
     .bind(("127.0.0.1", 8080))?
@@ -48,19 +50,28 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
-//Perform the creation of new shortened URLs
-#[post("/create")]
+// Create new shortened URLs - using an integer as the ID - for the scale of this application
+// hashes are longer
+#[post("/")]
 async fn create(pool: DbPool, form: web::Form<Request>) -> Result<String> {
-    let url = form.into_inner().url;
+    let url_in = form.into_inner().url;
+    let server_url = env::var("SERVER_URL").expect("SERVER_URL must be set");
     match web::block(move || {
         let mut conn = pool.get().expect("Couldn't get DB connection");
+        if let Ok(res) = urls::table
+            .select(urls::id)
+            .filter(urls::url.eq(&url_in))
+            .get_result::<i32>(&mut conn)
+        {
+            return Ok((res, String::default()));
+        }
         insert_into(urls::table)
-            .values(urls::url.eq(url))
-            .get_result::<(i32, String)>(&mut conn)
+            .values(urls::url.eq(url_in))
+            .get_result::<(i32, _)>(&mut conn)
     })
     .await?
     {
-        Ok(u) => Ok(format!("http://127.0.0.1/{}", u.0)),
+        Ok(u) => Ok(format!("{}/{}", server_url, u.0)),
         Err(e) => Err(actix_web::error::ErrorInternalServerError(format!(
             "Failed to create entry: {e:?}"
         ))),
@@ -82,8 +93,20 @@ async fn redirect(pool: DbPool, path: web::Path<i32>) -> Result<Redirect> {
     {
         Ok(Redirect::to(url).permanent())
     } else {
-        Err(ErrorNotFound(
-            "URL not found - check the link is correctly typed.",
-        ))
+        Err(ErrorNotFound("URL not found"))
+    }
+}
+
+#[delete("/{id}")]
+async fn delete(pool: DbPool, path: web::Path<i32>) -> Result<impl Responder> {
+    if let Err(e) = web::block(move || {
+        let mut conn = pool.get().expect("Couldn't get DB connection");
+        diesel::delete(urls::table.filter(urls::id.eq(path.into_inner()))).execute(&mut conn)
+    })
+    .await?
+    {
+        Err(ErrorNotFound(e))
+    } else {
+        Ok(HttpResponse::Ok())
     }
 }
