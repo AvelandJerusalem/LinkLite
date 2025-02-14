@@ -6,7 +6,7 @@ import './App.css'
 function Input() {
   const [err, setErr] = useState();
   const [url, setUrl] = useState();
-  const apiURL = 'http://localhost:8080'
+  const apiURL = 'https://short.jeremypetch.com'
 
   const handleSubmit = async (e) => {
     e.preventDefault();
