@@ -61,7 +61,7 @@ async fn main() -> std::io::Result<()> {
 // Create new shortened URLs - using an integer as the ID - for the scale of this application
 // hashes are longer
 #[post("/")]
-async fn create(pool: DbPool, form: web::Form<Request>) -> Result<String> {
+async fn create(pool: DbPool, form: web::Json<Request>) -> Result<String> {
     let url_in = form.into_inner().url;
     let server_url = env::var("SERVER_URL").expect("SERVER_URL must be set");
     match web::block(move || {
