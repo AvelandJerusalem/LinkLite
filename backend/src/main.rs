@@ -2,8 +2,10 @@ mod schema;
 use actix_cors::Cors;
 use actix_web::{
     delete,
-    error::ErrorNotFound,
-    get, post,
+    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
+    get,
+    http::header::CONTENT_TYPE,
+    post,
     web::{self, Redirect},
     App, HttpResponse, HttpServer, Responder, Result,
 };
@@ -43,7 +45,11 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         //Define liberal CORS rules as this is a public API
         //Within the closure as cannot be passed safely between threads
-        let cors = Cors::default().allow_any_origin().allow_any_method();
+        let cors = Cors::default()
+            .allow_any_origin()
+            .allowed_methods(vec!["GET", "POST", "DELETE"])
+            .allowed_header(CONTENT_TYPE)
+            .max_age(3600);
 
         App::new()
             .wrap(cors)
@@ -67,16 +73,10 @@ async fn create(pool: DbPool, form: web::Json<Request>) -> Result<String> {
     match reqwest::get(url_in.clone()).await {
         Ok(resp) => {
             if !resp.status().is_success() {
-                return Err(actix_web::error::ErrorBadRequest(
-                    "Failed to query from URL",
-                ));
+                return Err(ErrorBadRequest("Failed to query from URL"));
             }
         }
-        Err(e) => {
-            return Err(actix_web::error::ErrorBadRequest(format!(
-                "Failed to check URL - {e}"
-            )))
-        }
+        Err(e) => return Err(ErrorBadRequest(format!("Failed to check URL - {e}"))),
     };
 
     match web::block(move || {
@@ -95,7 +95,7 @@ async fn create(pool: DbPool, form: web::Json<Request>) -> Result<String> {
     .await?
     {
         Ok(u) => Ok(format!("{}/{}", server_url, u.0)),
-        Err(e) => Err(actix_web::error::ErrorInternalServerError(format!(
+        Err(e) => Err(ErrorInternalServerError(format!(
             "Failed to create entry: {e:?}"
         ))),
     }
