@@ -38,6 +38,7 @@ async fn main() -> std::io::Result<()> {
         .test_on_check_out(true)
         .build(manager)
         .expect("Could not build connection pool");
+
     //Run the http server, including the redirect, and create routes and the DB pool
     HttpServer::new(move || {
         //Define liberal CORS rules as this is a public API
@@ -64,6 +65,22 @@ async fn main() -> std::io::Result<()> {
 async fn create(pool: DbPool, form: web::Json<Request>) -> Result<String> {
     let url_in = form.into_inner().url;
     let server_url = env::var("SERVER_URL").expect("SERVER_URL must be set");
+
+    match reqwest::get(url_in.clone()).await {
+        Ok(resp) => {
+            if !resp.status().is_success() {
+                return Err(actix_web::error::ErrorBadRequest(
+                    "Failed to query from URL",
+                ));
+            }
+        }
+        Err(e) => {
+            return Err(actix_web::error::ErrorBadRequest(format!(
+                "Failed to check URL - {e}"
+            )))
+        }
+    };
+
     match web::block(move || {
         let mut conn = pool.get().expect("Couldn't get DB connection");
         if let Ok(res) = urls::table
