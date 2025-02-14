@@ -43,9 +43,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         //Define liberal CORS rules as this is a public API
         //Within the closure as cannot be passed safely between threads
-        let cors = Cors::default()
-            .allow_any_origin()
-            .allowed_methods(vec!["GET", "POST", "DELETE"]);
+        let cors = Cors::default().allow_any_origin().allow_any_method();
 
         App::new()
             .wrap(cors)
