@@ -1,4 +1,5 @@
 mod schema;
+use actix_cors::Cors;
 use actix_web::{
     delete,
     error::ErrorNotFound,
@@ -39,7 +40,14 @@ async fn main() -> std::io::Result<()> {
         .expect("Could not build connection pool");
     //Run the http server, including the redirect, and create routes and the DB pool
     HttpServer::new(move || {
+        //Define liberal CORS rules as this is a public API
+        //Within the closure as cannot be passed safely between threads
+        let cors = Cors::default()
+            .allow_any_origin()
+            .allowed_methods(vec!["GET", "POST", "DELETE"]);
+
         App::new()
+            .wrap(cors)
             .service(redirect)
             .service(create)
             .service(delete)

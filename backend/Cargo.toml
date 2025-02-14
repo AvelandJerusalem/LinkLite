@@ -4,8 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+actix-cors = "0.7.0"
 actix-web = {version="4.9.0",features=["openssl"]}
 diesel = { version = "2.2.4", features = ["sqlite","r2d2","returning_clauses_for_sqlite_3_35"] }
 dotenvy = "0.15.7"
 r2d2 = "0.8.10"
 serde = { version = "1.0.217", features = ["derive"] }
+
+[features]
+static_ssl = ['openssl/vendored']
+
+[dependencies.openssl]
+optional = true
+version = "0.10.0" 
