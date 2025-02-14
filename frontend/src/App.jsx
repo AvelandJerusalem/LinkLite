@@ -8,6 +8,7 @@ function Input() {
   const [url, setUrl] = useState();
   const apiURL = 'https://short.jeremypetch.com'
 
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -18,7 +19,8 @@ function Input() {
     } else {
       setErr("");
       setUrl("");
-      const res = await axios.post(apiURL, { url: urlIn })
+      const headers = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
+      const res = await axios.post(apiURL, { url: urlIn }, headers)
       if (res.status != 200) {
         setErr("Failed to post - " + res.data);
       } else {
@@ -36,7 +38,7 @@ function Input() {
         <br />
         <button type="submit">Submit</button>
       </form>
-      <div>Shortened URL: {url}</div>
+      {url != '' && <div>Shortened URL: {url}</div>}
       <div color='red'>{err}</div>
     </>
   )
