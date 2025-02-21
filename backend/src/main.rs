@@ -2,12 +2,12 @@ mod schema;
 use actix_cors::Cors;
 use actix_web::{
     delete,
-    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
+    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound, ErrorUnauthorized},
     get,
-    http::header::CONTENT_TYPE,
+    http::header::{HeaderName, CONTENT_TYPE},
     post,
     web::{self, Redirect},
-    App, HttpResponse, HttpServer, Responder, Result,
+    App, HttpRequest, HttpResponse, HttpServer, Responder, Result,
 };
 use diesel::{
     insert_into,
@@ -25,6 +25,12 @@ type DbPool = web::Data<Pool<ConnectionManager<SqliteConnection>>>;
 #[derive(Serialize, Deserialize)]
 struct Request {
     url: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Auth {
+    #[serde(rename = "Authorization")]
+    auth: String,
 }
 
 #[actix_web::main]
@@ -73,7 +79,10 @@ async fn create(pool: DbPool, form: web::Json<Request>) -> Result<String> {
     match reqwest::get(url_in.clone()).await {
         Ok(resp) => {
             if !resp.status().is_success() {
-                return Err(ErrorBadRequest("Failed to query from URL"));
+                return Err(ErrorBadRequest(format!(
+                    "Failed to query from URL - {}",
+                    resp.status().to_string()
+                )));
             }
         }
         Err(e) => return Err(ErrorBadRequest(format!("Failed to check URL - {e}"))),
@@ -121,7 +130,18 @@ async fn redirect(pool: DbPool, path: web::Path<i32>) -> Result<Redirect> {
 }
 
 #[delete("/{id}")]
-async fn delete(pool: DbPool, path: web::Path<i32>) -> Result<impl Responder> {
+async fn delete(pool: DbPool, path: web::Path<i32>, req: HttpRequest) -> Result<impl Responder> {
+    let headers = req.headers();
+
+    if let Some(auth) = headers.get(HeaderName::from_static("x-auth")) {
+        let secret = env::var("DELETE_SECRET").expect("DELETE_SECRET must be set");
+        if secret != auth.to_str().unwrap() {
+            return Err(ErrorUnauthorized("Invalid x-auth header"));
+        }
+    } else {
+        return Err(ErrorUnauthorized("The x-auth header must be set"));
+    }
+
     if let Err(e) = web::block(move || {
         let mut conn = pool.get().expect("Couldn't get DB connection");
         diesel::delete(urls::table.filter(urls::id.eq(path.into_inner()))).execute(&mut conn)
