@@ -27,12 +27,6 @@ struct Request {
     url: String,
 }
 
-#[derive(Serialize, Deserialize)]
-struct Auth {
-    #[serde(rename = "Authorization")]
-    auth: String,
-}
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     //Use the .env file to define the database url env var
@@ -81,7 +75,7 @@ async fn create(pool: DbPool, form: web::Json<Request>) -> Result<String> {
             if !resp.status().is_success() {
                 return Err(ErrorBadRequest(format!(
                     "Failed to query from URL - {}",
-                    resp.status().to_string()
+                    resp.status()
                 )));
             }
         }
@@ -113,19 +107,23 @@ async fn create(pool: DbPool, form: web::Json<Request>) -> Result<String> {
 #[get("/{id}")]
 async fn redirect(pool: DbPool, path: web::Path<i32>) -> Result<Redirect> {
     let id = path.into_inner();
-    if let Some(url) = web::block(move || {
+    match web::block(move || {
         let mut conn = pool.get().expect("Couldn't get DB connection");
         urls::table
             .select(urls::url)
             .filter(urls::id.eq(id))
             .get_result::<String>(&mut conn)
-            .ok()
     })
     .await?
     {
-        Ok(Redirect::to(url).permanent())
-    } else {
-        Err(ErrorNotFound("URL not found"))
+        Ok(url) => Ok(Redirect::to(url).permanent()),
+        Err(e) => {
+            if e.to_string() == "no such table: urls" {
+                println!("The URLs table was not found - you need to run migrations!");
+                return Err(ErrorInternalServerError("URLs table not found"));
+            }
+            Err(ErrorNotFound("URL not found"))
+        }
     }
 }
 
